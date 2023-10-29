@@ -1,7 +1,7 @@
 use hyper::body::Buf;
 use hyper::client::{Client, HttpConnector};
 use hyper::{Body, Method, Request, StatusCode, Uri};
-use hyper_tls::HttpsConnector;
+use hyper_rustls::HttpsConnector;
 
 use std::str::FromStr;
 
