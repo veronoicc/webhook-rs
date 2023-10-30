@@ -1,13 +1,13 @@
 use hyper::body::Buf;
 use hyper::client::{Client, HttpConnector};
 use hyper::{Body, Method, Request, StatusCode, Uri};
-use hyper_rustls::HttpsConnector;
+use hyper_tls::HttpsConnector;
 
 use std::str::FromStr;
 
 use crate::models::{DiscordApiCompatible, Message, MessageContext, Webhook};
 
-pub type WebhookResult<Type> = std::result::Result<Type, Box<dyn std::error::Error + Send + Sync>>;
+pub type WebhookResult<Type> = Result<Type, Box<dyn std::error::Error + Send + Sync>>;
 
 /// A Client that sends webhooks for discord.
 pub struct WebhookClient {
