@@ -1,9 +1,9 @@
 use hyper::body::Buf;
 use hyper::client::{Client, HttpConnector};
 use hyper::{Body, Method, Request, StatusCode, Uri};
-use hyper_tls::HttpsConnector;
 
 use std::str::FromStr;
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 
 use crate::models::{DiscordApiCompatible, Message, MessageContext, Webhook};
 
@@ -17,7 +17,11 @@ pub struct WebhookClient {
 
 impl WebhookClient {
     pub fn new(url: &str) -> Self {
-        let https_connector = HttpsConnector::new();
+        let https_connector = HttpsConnectorBuilder::new()
+            .with_webpki_roots()
+            .https_only()
+            .enable_http1()
+            .build();
         let client = Client::builder().build::<_, hyper::Body>(https_connector);
         Self {
             client,
