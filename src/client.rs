@@ -10,6 +10,7 @@ use crate::models::{DiscordApiCompatible, Message, MessageContext, Webhook};
 pub type WebhookResult<Type> = Result<Type, Box<dyn std::error::Error + Send + Sync>>;
 
 /// A Client that sends webhooks for discord.
+#[derive(Clone)]
 pub struct WebhookClient {
     client: Client<HttpsConnector<HttpConnector>>,
     url: String,
