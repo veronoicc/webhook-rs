@@ -47,7 +47,7 @@ impl WebhookClient {
         Ok(result)
     }
 
-    pub async fn edit<Func>(&self, id: i64, function: Func) -> WebhookResult<i64>
+    pub async fn edit<Func>(&self, id: i64, function: Func) -> WebhookResult<()>
     where
         Func: Fn(&mut Message) -> &mut Message,
     {
@@ -89,21 +89,25 @@ impl WebhookClient {
             .json(message)
             .send()
             .await?;
-        Self::parse_response(response).await
+        if response.status() == StatusCode::OK {
+            let json: serde_json::Value = response.json().await?;
+            Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
+        } else {
+            let err_msg = response.text().await?;
+            Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                err_msg,
+            )))
+        }
     }
 
-    pub async fn edit_message(&self, id: i64, message: &Message) -> WebhookResult<i64> {
+    pub async fn edit_message(&self, id: i64, message: &Message) -> WebhookResult<()> {
         let response = self.client.patch(format!("{}/messages/{}", &self.url, id))
             .json(message)
             .send()
             .await?;
-        Self::parse_response(response).await
-    }
-
-    async fn parse_response(response: Response) -> WebhookResult<i64> {
         if response.status() == StatusCode::OK {
-            let json: serde_json::Value = response.json().await?;
-            Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
+            Ok(())
         } else {
             let err_msg = response.text().await?;
             Err(Box::new(std::io::Error::new(
