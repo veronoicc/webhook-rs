@@ -91,8 +91,7 @@ impl WebhookClient {
             .await?;
         if response.status() == StatusCode::OK {
             let json: serde_json::Value = response.json().await?;
-            println!("Json: {:?}", json);
-            Ok(json.as_object().unwrap()["id"].as_i64().unwrap())
+            Ok(json.as_object().unwrap()["id"].as_str().unwrap().parse().unwrap())
         } else {
             let err_msg = response.text().await?;
             Err(Box::new(std::io::Error::new(
