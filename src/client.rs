@@ -84,6 +84,8 @@ impl WebhookClient {
     }
 
     pub async fn send_message(&self, message: &Message) -> WebhookResult<i64> {
+        println!("Message is: {:?}", serde_json::to_string(message).unwrap());
+
         let response = self.client.post(format!("{}/messages", &self.url))
             .query(&[("wait", true)])
             .header("content-type", "application/json")
