@@ -1,9 +1,5 @@
-use hyper::body::Buf;
-use hyper::client::{Client, HttpConnector};
-use hyper::{Body, Method, Request, StatusCode, Uri};
-
 use std::str::FromStr;
-use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+use reqwest::{Client, Method, Request, StatusCode, Url};
 
 use crate::models::{DiscordApiCompatible, Message, MessageContext, Webhook};
 
@@ -12,21 +8,15 @@ pub type WebhookResult<Type> = Result<Type, Box<dyn std::error::Error + Send + S
 /// A Client that sends webhooks for discord.
 #[derive(Clone)]
 pub struct WebhookClient {
-    client: Client<HttpsConnector<HttpConnector>>,
-    url: String,
+    client: Client,
+    url: Url,
 }
 
 impl WebhookClient {
-    pub fn new(url: &str) -> Self {
-        let https_connector = HttpsConnectorBuilder::new()
-            .with_webpki_roots()
-            .https_only()
-            .enable_http1()
-            .build();
-        let client = Client::builder().build::<_, hyper::Body>(https_connector);
+    pub fn new(url: Url) -> Self {
         Self {
-            client,
-            url: url.to_owned(),
+            client: Client::new(),
+            url,
         }
     }
 
@@ -37,7 +27,7 @@ impl WebhookClient {
     ///     .content("content")
     ///     .username("username")).await?;
     /// ```
-    pub async fn send<Func>(&self, function: Func) -> WebhookResult<bool>
+    pub async fn send<Func>(&self, function: Func) -> WebhookResult<i64>
     where
         Func: Fn(&mut Message) -> &mut Message,
     {
@@ -58,7 +48,7 @@ impl WebhookClient {
         Ok(result)
     }
 
-    pub async fn edit<Func>(&self, id: i64, function: Func) -> WebhookResult<bool>
+    pub async fn edit<Func>(&self, id: i64, function: Func) -> WebhookResult<i64>
     where
         Func: Fn(&mut Message) -> &mut Message,
     {
@@ -80,25 +70,13 @@ impl WebhookClient {
     }
 
     pub async fn delete(&self, id: i64) -> WebhookResult<bool> {
-        let request = Request::builder()
-            .method(Method::DELETE)
-            .uri(&format!("{}/messages/{}", &self.url, id))
-            .body(Body::empty())?;
-        let response = self.client.request(request).await?;
-
-        // https://discord.com/developers/docs/resources/webhook#delete-webhook-message
-        // delete webhook message returns either NO_CONTENT or a message
+        let response = self.client.delete(format!("{}/messages/{}", &self.url, id))
+            .send()
+            .await?;
         if response.status() == StatusCode::NO_CONTENT {
             Ok(true)
         } else {
-            let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
-            let err_msg = match String::from_utf8(body_bytes.to_vec()) {
-                Ok(msg) => msg,
-                Err(err) => {
-                    "Error reading Discord API error message:".to_string() + &err.to_string()
-                }
-            };
-
+            let err_msg = response.text()?;
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 err_msg,
@@ -106,28 +84,18 @@ impl WebhookClient {
         }
     }
 
-    pub async fn send_message(&self, message: &Message) -> WebhookResult<bool> {
-        let body = serde_json::to_string(message)?;
-        let request = Request::builder()
-            .method(Method::POST)
-            .uri(&self.url)
+    pub async fn send_message(&self, message: &Message) -> WebhookResult<i64> {
+        let response = self.client.post(format!("{}/messages", &self.url))
+            .query(&[("wait", true)])
             .header("content-type", "application/json")
-            .body(Body::from(body))?;
-        let response = self.client.request(request).await?;
-
-        // https://discord.com/developers/docs/resources/webhook#execute-webhook
-        // execute webhook returns either NO_CONTENT or a message
-        if response.status() == StatusCode::NO_CONTENT {
-            Ok(true)
+            .json(message)
+            .send()
+            .await?;
+        if response.status() == StatusCode::OK {
+            let json: serde_json::Value = response.json().await?;
+            Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
         } else {
-            let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
-            let err_msg = match String::from_utf8(body_bytes.to_vec()) {
-                Ok(msg) => msg,
-                Err(err) => {
-                    "Error reading Discord API error message:".to_string() + &err.to_string()
-                }
-            };
-
+            let err_msg = response.text()?;
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 err_msg,
@@ -135,28 +103,18 @@ impl WebhookClient {
         }
     }
 
-    pub async fn edit_message(&self, id: i64, message: &Message) -> WebhookResult<bool> {
-        let body = serde_json::to_string(message)?;
-        let request = Request::builder()
-            .method(Method::PATCH)
-            .uri(&format!("{}/messages/{}", &self.url, id))
+    pub async fn edit_message(&self, id: i64, message: &Message) -> WebhookResult<i64> {
+        let response = self.client.patch(format!("{}/messages/{}", &self.url, id))
+            .query(&[("wait", true)])
             .header("content-type", "application/json")
-            .body(Body::from(body))?;
-        let response = self.client.request(request).await?;
-
-        // https://discord.com/developers/docs/resources/webhook#edit-webhook-message
-        // edit webhook message returns either NO_CONTENT or a message
-        if response.status() == StatusCode::NO_CONTENT {
-            Ok(true)
+            .json(message)
+            .send()
+            .await?;
+        if response.status() == StatusCode::OK {
+            let json: serde_json::Value = response.json().await?;
+            Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
         } else {
-            let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
-            let err_msg = match String::from_utf8(body_bytes.to_vec()) {
-                Ok(msg) => msg,
-                Err(err) => {
-                    "Error reading Discord API error message:".to_string() + &err.to_string()
-                }
-            };
-
+            let err_msg = response.text()?;
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 err_msg,
@@ -165,11 +123,9 @@ impl WebhookClient {
     }
 
     pub async fn get_information(&self) -> WebhookResult<Webhook> {
-        let response = self.client.get(Uri::from_str(&self.url)?).await?;
-        let body = hyper::body::aggregate(response).await?;
-        let webhook = serde_json::from_reader(body.reader())?;
+        let response = self.client.get(&self.url).send().await?.json().await?;
 
-        Ok(webhook)
+        Ok(response)
     }
 }
 
