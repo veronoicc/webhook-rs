@@ -109,7 +109,7 @@ impl WebhookClient {
         } else {
             let err_msg = response.text().await?;
             Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
+                std::io::ErrorKind::InvalidData,
                 err_msg,
             )))
         }
