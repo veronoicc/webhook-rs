@@ -91,6 +91,7 @@ impl WebhookClient {
             .await?;
         if response.status() == StatusCode::OK {
             let json: serde_json::Value = response.json().await?;
+            println!("Json: {:?}", json);
             Ok(json.as_object().unwrap()["id"].as_i64().unwrap())
         } else {
             let err_msg = response.text().await?;
