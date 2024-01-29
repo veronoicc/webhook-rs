@@ -9,11 +9,11 @@ pub type WebhookResult<Type> = Result<Type, Box<dyn std::error::Error + Send + S
 #[derive(Clone)]
 pub struct WebhookClient {
     client: Client,
-    url: Url,
+    url: String,
 }
 
 impl WebhookClient {
-    pub fn new(url: Url) -> Self {
+    pub fn new(url: String) -> Self {
         Self {
             client: Client::new(),
             url,
@@ -76,7 +76,7 @@ impl WebhookClient {
         if response.status() == StatusCode::NO_CONTENT {
             Ok(true)
         } else {
-            let err_msg = response.text()?;
+            let err_msg = response.text().await?;
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 err_msg,
@@ -95,7 +95,7 @@ impl WebhookClient {
             let json: serde_json::Value = response.json().await?;
             Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
         } else {
-            let err_msg = response.text()?;
+            let err_msg = response.text().await?;
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 err_msg,
@@ -114,7 +114,7 @@ impl WebhookClient {
             let json: serde_json::Value = response.json().await?;
             Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
         } else {
-            let err_msg = response.text()?;
+            let err_msg = response.text().await?;
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 err_msg,
