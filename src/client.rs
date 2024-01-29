@@ -1,5 +1,4 @@
-use std::str::FromStr;
-use reqwest::{Client, Method, Request, StatusCode, Url};
+use reqwest::{Client, IntoUrl, Response, StatusCode, Url};
 
 use crate::models::{DiscordApiCompatible, Message, MessageContext, Webhook};
 
@@ -9,15 +8,15 @@ pub type WebhookResult<Type> = Result<Type, Box<dyn std::error::Error + Send + S
 #[derive(Clone)]
 pub struct WebhookClient {
     client: Client,
-    url: String,
+    url: Url,
 }
 
 impl WebhookClient {
-    pub fn new(url: String) -> Self {
-        Self {
+    pub fn new(url: impl IntoUrl) -> Result<Self, reqwest::Error> {
+        Ok(Self {
             client: Client::new(),
-            url,
-        }
+            url: url.into_url()?,
+        })
     }
 
     /// Example
@@ -27,7 +26,7 @@ impl WebhookClient {
     ///     .content("content")
     ///     .username("username")).await?;
     /// ```
-    pub async fn send<Func>(&self, function: Func) -> WebhookResult<i64>
+    pub async fn execute<Func>(&self, function: Func) -> WebhookResult<i64>
     where
         Func: Fn(&mut Message) -> &mut Message,
     {
@@ -91,25 +90,19 @@ impl WebhookClient {
             .json(message)
             .send()
             .await?;
-        if response.status() == StatusCode::OK {
-            let json: serde_json::Value = response.json().await?;
-            Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
-        } else {
-            let err_msg = response.text().await?;
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                err_msg,
-            )))
-        }
+        Self::parse_response(response).await
     }
 
     pub async fn edit_message(&self, id: i64, message: &Message) -> WebhookResult<i64> {
         let response = self.client.patch(format!("{}/messages/{}", &self.url, id))
-            .query(&[("wait", true)])
             .header("content-type", "application/json")
             .json(message)
             .send()
             .await?;
+        Self::parse_response(response).await
+    }
+
+    async fn parse_response(response: Response) -> WebhookResult<i64> {
         if response.status() == StatusCode::OK {
             let json: serde_json::Value = response.json().await?;
             Ok(json.as_object().unwrap().get("id").unwrap().as_i64().unwrap())
@@ -123,8 +116,7 @@ impl WebhookClient {
     }
 
     pub async fn get_information(&self) -> WebhookResult<Webhook> {
-        let response = self.client.get(&self.url).send().await?.json().await?;
-
+        let response = self.client.get(self.url.clone()).send().await?.json().await?;
         Ok(response)
     }
 }
@@ -148,7 +140,7 @@ mod tests {
                 assert!(
                     msg_pred(&err.to_string()),
                     "Unexpected error message {}",
-                    err.to_string()
+                    err
                 )
             }
             Ok(_) => assert!(false, "Error is expected"),
